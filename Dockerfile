@@ -41,11 +41,16 @@ RUN set -eux; \
 # Locate the app root by the directory that contains composer.json, so we are
 # robust to both the wrapped (pinakes-vX.Y.Z/) and flat ZIP layouts.
 RUN set -eux; \
-    url="https://github.com/fabiodalez-dev/Pinakes/releases/download/v${PINAKES_VERSION}/pinakes-v${PINAKES_VERSION}.zip"; \
-    echo "Downloading ${url}"; \
-    curl -fSL "$url" -o /tmp/pinakes.zip; \
+    base="https://github.com/fabiodalez-dev/Pinakes/releases/download/v${PINAKES_VERSION}"; \
+    zipname="pinakes-v${PINAKES_VERSION}.zip"; \
+    echo "Downloading ${base}/${zipname}"; \
+    curl -fSL "${base}/${zipname}" -o "/tmp/${zipname}"; \
+    # Integrity: verify against the .sha256 sidecar that create-release.sh
+    # publishes next to the ZIP (bare filename inside, so check from /tmp).
+    curl -fSL "${base}/${zipname}.sha256" -o "/tmp/${zipname}.sha256"; \
+    ( cd /tmp && sha256sum -c "${zipname}.sha256" ); \
     mkdir -p /tmp/pinakes-extract; \
-    unzip -q /tmp/pinakes.zip -d /tmp/pinakes-extract; \
+    unzip -q "/tmp/${zipname}" -d /tmp/pinakes-extract; \
     approot="$(dirname "$(find /tmp/pinakes-extract -maxdepth 2 -name composer.json | head -1)")"; \
     test -n "$approot"; \
     test -f "$approot/public/index.php"; \
@@ -53,7 +58,7 @@ RUN set -eux; \
     rm -rf /var/www/html; \
     mkdir -p /var/www/html; \
     cp -a "$approot/." /var/www/html/; \
-    rm -rf /tmp/pinakes.zip /tmp/pinakes-extract; \
+    rm -rf "/tmp/${zipname}" "/tmp/${zipname}.sha256" /tmp/pinakes-extract; \
     # vendor must be production-clean (no phpstan refs) — fail loudly otherwise
     ! grep -q "phpstan" /var/www/html/vendor/composer/autoload_static.php
 

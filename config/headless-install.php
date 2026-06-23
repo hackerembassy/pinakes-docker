@@ -58,8 +58,43 @@ try {
         "CREATE DATABASE IF NOT EXISTS `" . str_replace('`', '', $dbName) . "` " .
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
     );
-    $root = null;
     out("Database `{$dbName}` ready.");
+
+    // Idempotency for container recreate / image upgrade: the .installed marker
+    // lives in the (ephemeral) container layer, not a volume, so a normal
+    // `docker compose up` after a `down` loses it while the db_data volume keeps
+    // the database. Without this guard the re-run would reach createAdminUser()
+    // and die on the utenti.email UNIQUE key (schema/data imports are
+    // duplicate-tolerant, the admin INSERT is not). Detect an existing install
+    // from the database itself: if utenti has rows, just re-write the lock and
+    // skip the whole import.
+    $alreadyInstalled = false;
+    try {
+        $hasUtenti = (int) $root->query(
+            "SELECT COUNT(*) FROM information_schema.tables " .
+            "WHERE table_schema = " . $root->quote($dbName) . " AND table_name = 'utenti'"
+        )->fetchColumn();
+        if ($hasUtenti > 0) {
+            $appDsn = ($dbSocket !== ''
+                ? "mysql:unix_socket={$dbSocket}"
+                : "mysql:host={$dbHost};port={$dbPort}") . ";dbname={$dbName};charset=utf8mb4";
+            $dbh = new PDO($appDsn, $dbUser, $dbPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $alreadyInstalled = ((int) $dbh->query("SELECT COUNT(*) FROM utenti")->fetchColumn()) > 0;
+            $dbh = null;
+        }
+    } catch (\Throwable $e) {
+        // Inconclusive -> treat as not installed and let the canonical (and
+        // duplicate-tolerant) import run.
+    }
+    $root = null;
+
+    if ($alreadyInstalled) {
+        out('Existing install detected in the database (utenti populated) —');
+        out('re-locking and skipping import (container recreate / upgrade).');
+        $installer->createLockFile();
+        out('✓ Re-locked existing install.');
+        exit(0);
+    }
 } catch (\Throwable $e) {
     fail('Could not create/verify database: ' . $e->getMessage());
 }
@@ -115,7 +150,16 @@ if ($adminEmail !== '' && $adminPass !== '') {
         out("Creating admin user {$adminEmail}…");
         $installer->createAdminUser($adminName, $adminSurn, $adminEmail, $adminPass);
     } catch (\Throwable $e) {
-        fail('Admin creation failed: ' . $e->getMessage());
+        // Defence in depth: the early DB-already-installed guard normally
+        // prevents reaching here on a re-run, but if the admin email already
+        // exists (e.g. a half-finished prior run), treat a duplicate-key as
+        // success rather than wedging the container in an unhealthy loop.
+        $msg = $e->getMessage();
+        if (stripos($msg, 'Duplicate entry') !== false || strpos($msg, '23000') !== false) {
+            out('  admin already exists — keeping the existing one.');
+        } else {
+            fail('Admin creation failed: ' . $msg);
+        }
     }
     if (!$installer->createLockFile()) {
         fail('Could not write .installed lock file.');

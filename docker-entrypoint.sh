@@ -80,21 +80,39 @@ chown -R www-data:www-data \
 if [ -z "$DB_SOCKET" ]; then
     log "Waiting for database ${DB_HOST}:${DB_PORT} …"
     tries=0
-    until php -r '
-        $h=getenv("DB_HOST");$p=(int)getenv("DB_PORT");$u=getenv("DB_USER");
-        $w=getenv("DB_PASS");
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $c=@mysqli_connect($h,$u,$w,"",$p);
-        exit($c?0:1);
-    '; do
+    auth_fails=0
+    # The probe returns: 0 = connected, 2 = access-denied (1045), 1 = transient
+    # (server not up yet). We fail FAST on persistent auth errors with a clear
+    # message instead of silently looping for 120s, while still tolerating a
+    # brief window where the DB user isn't created yet during MySQL init.
+    while true; do
+        if php -r '
+            $h=getenv("DB_HOST");$p=(int)getenv("DB_PORT");$u=getenv("DB_USER");
+            $w=getenv("DB_PASS");
+            mysqli_report(MYSQLI_REPORT_OFF);
+            $c=@mysqli_connect($h,$u,$w,"",$p);
+            if ($c) { exit(0); }
+            exit(mysqli_connect_errno() === 1045 ? 2 : 1);
+        '; then
+            log "Database is up."
+            break
+        else
+            rc=$?
+        fi
+        if [ "$rc" -eq 2 ]; then
+            auth_fails=$((auth_fails+1))
+            if [ "$auth_fails" -ge 5 ]; then
+                log "Database authentication failed (access denied for '${DB_USER}'). Check DB_USER/DB_PASS/DB_NAME."
+                exit 1
+            fi
+        fi
         tries=$((tries+1))
         if [ "$tries" -ge 60 ]; then
-            log "Database not reachable after 120s — giving up."
+            log "Database not reachable at ${DB_HOST}:${DB_PORT} after 120s — giving up."
             exit 1
         fi
         sleep 2
     done
-    log "Database is up."
 fi
 
 # --- 4. Headless install (idempotent) --------------------------------------
