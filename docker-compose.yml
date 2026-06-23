@@ -1,0 +1,69 @@
+# Pinakes ILS — production-ready compose.
+#   docker compose up -d        # pulls the published image
+#   docker compose up -d --build  # builds locally from ./Dockerfile
+#
+# Copy .env.example -> .env and adjust before first start (at minimum set
+# ADMIN_EMAIL/ADMIN_PASSWORD for a fully headless install, and a stable
+# PLUGIN_ENCRYPTION_KEY + strong DB passwords for production).
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpinakes}
+      MYSQL_DATABASE: ${DB_NAME:-pinakes}
+      MYSQL_USER: ${DB_USER:-pinakes}
+      MYSQL_PASSWORD: ${DB_PASS:-pinakes}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASS:-rootpinakes}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  app:
+    image: ghcr.io/fabiodalez-dev/pinakes-docker:${PINAKES_TAG:-latest}
+    build:
+      context: .
+      args:
+        PINAKES_VERSION: ${PINAKES_VERSION:-0.7.22}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-pinakes}
+      DB_USER: ${DB_USER:-pinakes}
+      DB_PASS: ${DB_PASS:-pinakes}
+      APP_ENV: ${APP_ENV:-production}
+      APP_LOCALE: ${APP_LOCALE:-it_IT}
+      APP_CANONICAL_URL: ${APP_CANONICAL_URL:-}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      DISPLAY_ERRORS: ${DISPLAY_ERRORS:-false}
+      FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      SESSION_LIFETIME: ${SESSION_LIFETIME:-3600}
+      # Set a stable key in .env for production (openssl rand -base64 32).
+      PLUGIN_ENCRYPTION_KEY: ${PLUGIN_ENCRYPTION_KEY:-}
+      # Provide both for a fully headless install (no web wizard).
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Admin}
+      ADMIN_SURNAME: ${ADMIN_SURNAME:-User}
+    volumes:
+      - storage:/var/www/html/storage
+      - uploads:/var/www/html/public/uploads
+
+volumes:
+  db_data:
+  storage:
+  uploads:

@@ -1,0 +1,11 @@
+# The app source is downloaded from the release ZIP at build time, so the build
+# context only needs the config/scripts. Keep it tiny.
+.git
+.github
+data
+*.md
+!README.md
+tests
+.env
+.env.*
+!.env.example
