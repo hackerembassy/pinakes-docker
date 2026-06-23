@@ -4,6 +4,7 @@ Production-ready, single-container Docker image for **[Pinakes](https://github.c
 
 [![Smoke test](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/smoke-test.yml)
 [![Build & Publish](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/build-publish-docker.yml/badge.svg)](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/build-publish-docker.yml)
+[![Docker Hub](https://img.shields.io/docker/v/fabiodalez/pinakes?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/fabiodalez/pinakes)
 
 - **One image, Apache + PHP 8.2** (mod_php) — no separate nginx/fpm container, mirrors the upstream "Apache-only" production target.
 - **Built from the official release ZIP** (which already ships a production `vendor/`), so the running image is byte-for-byte the artifact end users deploy — no source duplication, no Composer at build time.
@@ -40,8 +41,10 @@ docker run -d --name pinakes -p 8080:80 \
   -e PLUGIN_ENCRYPTION_KEY="base64:$(openssl rand -base64 32)" \
   -v pinakes_storage:/var/www/html/storage \
   -v pinakes_uploads:/var/www/html/public/uploads \
-  ghcr.io/fabiodalez-dev/pinakes-docker:latest
+  fabiodalez/pinakes:latest
 ```
+
+> **Images:** [`fabiodalez/pinakes`](https://hub.docker.com/r/fabiodalez/pinakes) on Docker Hub (public) and `ghcr.io/fabiodalez-dev/pinakes-docker` on GHCR. Tags: `latest` and each Pinakes version (e.g. `0.7.22`). Multi-arch: `linux/amd64` + `linux/arm64`.
 
 ---
 

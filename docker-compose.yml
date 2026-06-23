@@ -28,7 +28,9 @@ services:
       start_period: 30s
 
   app:
-    image: ghcr.io/fabiodalez-dev/pinakes-docker:${PINAKES_TAG:-latest}
+    # Public Docker Hub image (no auth needed). GHCR alternative:
+    #   ghcr.io/fabiodalez-dev/pinakes-docker:<tag>
+    image: fabiodalez/pinakes:${PINAKES_TAG:-latest}
     build:
       context: .
       args:
