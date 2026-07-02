@@ -20,6 +20,18 @@ Production-ready, single-container Docker image for **[Pinakes](https://github.c
 
 ---
 
+## Screenshots
+
+| Public catalog (OPAC) | Browse & filter |
+|---|---|
+| [![Home](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/01-opac-home.png)](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/01-opac-home.png) | [![Catalogue](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/02-catalogue.png)](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/02-catalogue.png) |
+
+| Admin dashboard | Collection management |
+|---|---|
+| [![Dashboard](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/03-admin-dashboard.png)](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/03-admin-dashboard.png) | [![Books](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/04-admin-books.png)](https://raw.githubusercontent.com/fabiodalez-dev/pinakes-docker/main/docs/screenshots/04-admin-books.png) |
+
+---
+
 ## Quick start
 
 ```bash
