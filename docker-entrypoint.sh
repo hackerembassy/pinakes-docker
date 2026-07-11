@@ -131,17 +131,18 @@ if [ -z "$DB_SOCKET" ]; then
 fi
 
 # --- 4. Headless install (idempotent) --------------------------------------
+run_as_www() {
+    if command -v runuser >/dev/null 2>&1; then
+        runuser -u www-data -- "$@"
+    else
+        su -p -s /bin/bash www-data -c "$(printf '%q ' "$@")"
+    fi
+}
+
 if [ -f "$APP_DIR/.installed" ]; then
     log "Pinakes already installed (.installed present) — skipping installer."
 else
     log "Running headless installer…"
-    run_as_www() {
-        if command -v runuser >/dev/null 2>&1; then
-            runuser -u www-data -- "$@"
-        else
-            su -p -s /bin/bash www-data -c "$(printf '%q ' "$@")"
-        fi
-    }
     # Pass the install-time vars explicitly so they survive the user switch.
     run_as_www env \
         DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_USER="$DB_USER" DB_PASS="$DB_PASS" \
@@ -149,6 +150,26 @@ else
         ADMIN_EMAIL="${ADMIN_EMAIL:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
         ADMIN_NAME="${ADMIN_NAME:-Admin}" ADMIN_SURNAME="${ADMIN_SURNAME:-User}" \
         php /usr/local/lib/pinakes/headless-install.php
+fi
+
+# --- 4b. Apply pending DB migrations (image-pull upgrades) ------------------
+# A newer image ships newer code AND its migration files, but nothing on Docker
+# ran them until now (the in-app updater only covers in-place updates), so
+# image-pull upgrades silently accumulated schema drift. The runner drives the
+# app's own Updater::runMigrations() and no-ops in milliseconds when the
+# recorded schema version already matches the image. Non-fatal by default;
+# it exits non-zero only with PINAKES_MIGRATE_STRICT=1.
+if [ -f "$APP_DIR/.installed" ]; then
+    log "Checking for pending database migrations…"
+    if ! run_as_www env \
+        DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_USER="$DB_USER" DB_PASS="$DB_PASS" \
+        DB_NAME="$DB_NAME" DB_SOCKET="$DB_SOCKET" \
+        PINAKES_MIGRATE_FROM="${PINAKES_MIGRATE_FROM:-}" \
+        PINAKES_MIGRATE_STRICT="${PINAKES_MIGRATE_STRICT:-}" \
+        php /usr/local/lib/pinakes/docker-migrate.php; then
+        log "Migration runner failed with PINAKES_MIGRATE_STRICT=1 — aborting."
+        exit 1
+    fi
 fi
 
 # Port reminder: EXPOSE 80 is only metadata — a `docker run` without -p reaches

@@ -28,6 +28,39 @@ $baseDir = '/var/www/html';
 function out(string $msg): void { fwrite(STDOUT, '[headless-install] ' . $msg . "\n"); }
 function fail(string $msg): void { fwrite(STDERR, '[headless-install] ERROR: ' . $msg . "\n"); exit(1); }
 
+/**
+ * Record the schema version a fresh install starts at, so docker-migrate.php
+ * (entrypoint step 4b) knows exactly which migrations are pending after a
+ * future image-pull upgrade instead of falling back to its legacy baseline.
+ * Best-effort: a missing stamp only costs a few idempotent re-runs later.
+ */
+function stampSchemaVersion(string $baseDir): void
+{
+    try {
+        $versionData = json_decode((string) @file_get_contents($baseDir . '/version.json'), true);
+        $version = is_array($versionData) ? (string) ($versionData['version'] ?? '') : '';
+        if ($version === '') {
+            return;
+        }
+        $dbSocket = getenv('DB_SOCKET') ?: '';
+        $dsn = ($dbSocket !== ''
+            ? "mysql:unix_socket={$dbSocket}"
+            : 'mysql:host=' . (getenv('DB_HOST') ?: 'db') . ';port=' . (int) (getenv('DB_PORT') ?: 3306))
+            . ';dbname=' . (getenv('DB_NAME') ?: 'pinakes') . ';charset=utf8mb4';
+        $dbh = new PDO($dsn, getenv('DB_USER') ?: 'pinakes', getenv('DB_PASS') ?: '',
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $stmt = $dbh->prepare(
+            "INSERT INTO system_settings (category, setting_key, setting_value, description)
+             VALUES ('system', 'docker_schema_version', ?, 'Schema version applied by the Docker migration runner')
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+        );
+        $stmt->execute([$version]);
+        out("Recorded schema version {$version} for the Docker migration runner.");
+    } catch (\Throwable $e) {
+        out('  schema-version stamp skipped (non-fatal): ' . $e->getMessage());
+    }
+}
+
 require $baseDir . '/installer/classes/Installer.php';
 
 $installer = new Installer($baseDir);
@@ -164,10 +197,12 @@ if ($adminEmail !== '' && $adminPass !== '') {
     if (!$installer->createLockFile()) {
         fail('Could not write .installed lock file.');
     }
+    stampSchemaVersion($baseDir);
     out('✓ Headless install complete — Pinakes is ready (no wizard needed).');
     exit(0);
 }
 
+stampSchemaVersion($baseDir);
 out('✓ Database prepared. ADMIN_EMAIL/ADMIN_PASSWORD not set — finish the');
 out('  admin-user step at /installer/ (everything else is already done).');
 exit(0);

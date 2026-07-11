@@ -110,16 +110,25 @@ The provided `docker-compose.yml` wires named volumes for all three. Also keep a
 
 ## Updating
 
-Pinakes ships an **in-app updater** (Admin → Updates) that works inside the container (the code dir is writable and OPcache revalidates timestamps). For most upgrades, that is the simplest path.
-
-To move the **image** to a new Pinakes version:
+The recommended way to update on Docker is to **move the container to the new image** — your data lives in the database and in the `storage`/`uploads` volumes, so it survives the swap:
 
 ```bash
 # pin a version
-PINAKES_TAG=0.7.23 docker compose pull && docker compose up -d
+PINAKES_TAG=0.7.33 docker compose pull && docker compose up -d
 # or always-latest
 docker compose pull && docker compose up -d
 ```
+
+On boot the entrypoint **applies any pending database migrations automatically** (it drives the app's own migration runner, tracking the applied schema version in `system_settings`), so an image pull is a *complete* upgrade — code and schema. It no-ops in milliseconds when the schema is already current. Knobs:
+
+| Env var | Purpose |
+|---|---|
+| `PINAKES_MIGRATE_FROM` | One-shot override of the starting schema version (only needed if you imported a pre-0.7.22 database dump). |
+| `PINAKES_MIGRATE_STRICT` | Set to `1` to make a failed migration abort the container start (default: log loudly and boot anyway). |
+
+Existing installs created by older images have no recorded schema version yet: the first boot assumes `0.7.22` (the first published image) and re-applies the — idempotent — migrations since then, healing any drift accumulated by past image-pull upgrades. Avoid manual file changes inside the container: anything written to the container layer is lost when the container is recreated.
+
+The **in-app updater** (Admin → Updates) also works inside the container (the code dir is writable and OPcache revalidates timestamps), but its changes only live in the container layer until you next move to the matching image.
 
 This image **auto-tracks upstream**: every Pinakes release triggers a rebuild here (see below), so `:latest` follows the newest stable Pinakes shortly after it ships.
 

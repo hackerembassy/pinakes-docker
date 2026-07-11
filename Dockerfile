@@ -83,6 +83,7 @@ RUN set -eux; \
 COPY config/php-custom.ini /usr/local/etc/php/conf.d/zz-pinakes.ini
 COPY config/apache-pinakes.conf /etc/apache2/sites-available/000-default.conf
 COPY config/headless-install.php /usr/local/lib/pinakes/headless-install.php
+COPY config/docker-migrate.php /usr/local/lib/pinakes/docker-migrate.php
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
