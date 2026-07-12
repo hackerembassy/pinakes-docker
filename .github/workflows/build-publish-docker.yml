@@ -129,8 +129,12 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: true
           sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No build cache. The image is built FROM the published release ZIP; with
+          # a gha cache, re-cutting the SAME version (a corrected ZIP under the same
+          # PINAKES_VERSION) reuses the stale download/extract layer and ships the
+          # OLD ZIP. Releases are infrequent, so a cold build is a cheap price for
+          # guaranteeing the image always matches the ZIP currently on GitHub.
+          no-cache: true
 
       - name: Summary
         run: |
