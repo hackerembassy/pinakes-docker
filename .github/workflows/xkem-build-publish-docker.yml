@@ -6,17 +6,13 @@ name: Build & Publish Docker image
 #   - workflow_dispatch: manual, with a version input
 #   - push of a v* tag in this repo
 on:
-  repository_dispatch:
-    types: [pinakes_release]
   workflow_dispatch:
     inputs:
-      version:
-        description: "Pinakes version to build (e.g. 0.7.22)"
+      branch:
+        description: "Pinakes repo branch to build"
+        default: "xkem"
         required: true
         type: string
-  push:
-    tags:
-      - "v*.*.*"
 
 permissions:
   contents: read
@@ -35,33 +31,16 @@ jobs:
 
       - name: Resolve target version
         id: ver
-        # Untrusted inputs (client_payload from repository_dispatch, ref name)
-        # enter ONLY via env vars, never inlined into the script, and are
-        # validated against a strict regex before anything downstream uses them.
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_VERSION: ${{ github.event.client_payload.pinakes_version }}
-          INPUT_VERSION: ${{ inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
         run: |
-          case "$EVENT_NAME" in
-            repository_dispatch) v="$DISPATCH_VERSION" ;;
-            workflow_dispatch)   v="$INPUT_VERSION" ;;
-            *)                   v="${REF_NAME#v}" ;;
-          esac
-          v="${v#v}"
-          if ! printf '%s' "$v" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+){0,2}(-[A-Za-z0-9.]+)?$'; then
-            echo "::error::Invalid version (rejected untrusted input)"; exit 1
-          fi
+          v="$(curl -s https://raw.githubusercontent.com/hackerembassy/Pinakes/refs/heads/${{ github.event.inputs.branch }}/version.json  | jq -r '.version')"
           echo "Resolved version: $v"
           echo "version=$v" >>"$GITHUB_OUTPUT"
 
       - name: Verify the Pinakes release ZIP exists
-        # VERSION is already regex-validated (digits/dots/hyphen/alnum only).
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          url="https://github.com/fabiodalez-dev/Pinakes/releases/download/v${VERSION}/pinakes-v${VERSION}.zip"
+          url="https://github.com/hackerembassy/Pinakes/archive/refs/heads/${{ github.event.inputs.branch }}.zip"
           echo "Checking $url"
           code=$(curl -sSL -o /dev/null -w '%{http_code}' -r 0-0 "$url" || echo 000)
           if [ "$code" != "206" ] && [ "$code" != "200" ]; then
